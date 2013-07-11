@@ -7,28 +7,45 @@ namespace WebAnalyzer
 {
     using System.IO;
     using System.Text;
+    using System.Text.RegularExpressions;
 
     using Lucene.Net.Analysis;
+    using Lucene.Net.Analysis.CJK;
+    using Lucene.Net.Analysis.De;
+    using Lucene.Net.Analysis.Ext;
+    using Lucene.Net.Analysis.Miscellaneous;
+    using Lucene.Net.Analysis.Query;
+    using Lucene.Net.Analysis.Shingle;
+    using Lucene.Net.Analysis.Snowball;
     using Lucene.Net.Analysis.Standard;
+    using Lucene.Net.Analysis.Tokenattributes;
+    using Lucene.Net.Util;
 
     using WebAnalyzer.Analyzers;
 
+    //  using WebAnalyzer.Analyzers;
+
+    //using WebAnalyzer.Analyzers;
+
     public partial class _Default : Page
     {
-
         public List<Analyzer> Analyzers { get; set; }
 
         protected void Page_Load(object sender, EventArgs e)
         {
             Analyzers = new List<Analyzer>();
-            Analyzers.Add(new StandardAnalyzer());
+            Analyzers.Add(new StandardAnalyzer(Version.LUCENE_30));
             Analyzers.Add(new KeywordAnalyzer());
-            Analyzers.Add(new StopAnalyzer());
+            Analyzers.Add(new StopAnalyzer(Version.LUCENE_30));
             Analyzers.Add(new SimpleAnalyzer());
             Analyzers.Add(new WhitespaceAnalyzer());
-            Analyzers.Add(new WordDelimiterAnalyzer());
+            Analyzers.Add(new ShingleAnalyzerWrapper(Version.LUCENE_30));
+            Analyzers.Add(new SingleCharTokenAnalyzer());
+            Analyzers.Add(new UnaccentedWordAnalyzer());
             Analyzers.Add(new StemmingAnalyzer());
         }
+
+        #region Hide Me
 
         public string Name
         {
@@ -39,22 +56,17 @@ namespace WebAnalyzer
 
         public string GetView(TokenStream tokenStream, out int numberOfTokens)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
+            var termDictionary = new Dictionary<string, int>();
 
-            Token token = tokenStream.Next();
+            var termAttr = tokenStream.GetAttribute<ITermAttribute>();
 
-            numberOfTokens = 0;
-
-            while (token != null)
+            while (tokenStream.IncrementToken())
             {
-                numberOfTokens++;
-
-                if (termDictionary.Keys.Contains(token.TermText()))
-                    termDictionary[token.TermText()] = termDictionary[token.TermText()] + 1;
+                if (termDictionary.Keys.Contains(termAttr.Term))
+                    termDictionary[termAttr.Term] = termDictionary[termAttr.Term] + 1;
                 else
-                    termDictionary.Add(token.TermText(), 1);
-
-                token = tokenStream.Next();
+                    termDictionary.Add(termAttr.Term, 1);
             }
 
             foreach (var item in termDictionary.OrderBy(x => x.Key))
@@ -62,31 +74,47 @@ namespace WebAnalyzer
                 sb.Append(item.Key + " [" + item.Value + "]   ");
             }
 
-            termDictionary.Clear();
-
+            numberOfTokens = termDictionary.Count;
             return sb.ToString();
         }
-
 
         public string GetTokenView(TokenStream tokenStream, out int numberOfTokens)
         {
-            StringBuilder sb = new StringBuilder();
 
-            Token token = tokenStream.Next();
 
+            var sb = new StringBuilder();
             numberOfTokens = 0;
 
-            while (token != null)
+            var termAttr = tokenStream.GetAttribute<ITermAttribute>();
+            var startOffset = tokenStream.GetAttribute<Lucene.Net.Analysis.Tokenattributes.IOffsetAttribute>();
+            while (tokenStream.IncrementToken())
             {
+
+                sb.Append(termAttr.Term + "   Start: " + startOffset.StartOffset.ToString().PadLeft(5) + "  End: " + startOffset.EndOffset.ToString().PadLeft(5) + "\r\n");
+
+                //var view = "[" + termAttr.Term + "]   ";
+                //sb.Append(view);
                 numberOfTokens++;
-                sb.Append(token.TermText() + "   Start: " + token.StartOffset().ToString().PadLeft(5) + "  End: " + token.EndOffset().ToString().PadLeft(5) + "\r\n");
-                token = tokenStream.Next();
             }
 
             return sb.ToString();
+
+
+            //StringBuilder sb = new StringBuilder();
+
+            //Token token = tokenStream.Next();
+
+            //numberOfTokens = 0;
+
+            //while (token != null)
+            //{
+            //    numberOfTokens++;
+            //    sb.Append(token.TermText() + "   Start: " + token.StartOffset().ToString().PadLeft(5) + "  End: " + token.EndOffset().ToString().PadLeft(5) + "\r\n");
+            //    token = tokenStream.Next();
+            //}
+
+            //return sb.ToString();
         }
-
-
 
         protected void Go_Click(object sender, EventArgs e)
         {
@@ -152,5 +180,7 @@ namespace WebAnalyzer
 
             }
         }
+
+        #endregion
     }
 }
